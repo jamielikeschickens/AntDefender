@@ -124,8 +124,6 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 			gameIsOver = 1;
 		}
 	}
-	printf("Bye from user");
-
 }
 
 //ATTACKER PROCESS... The attacker is controlled by this process attackerAnt,
@@ -163,10 +161,9 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 
 		waitMoment();
 	}
-	printf("Bye from attacker\n");
 }
 
-//COLLISION DETECTOR... the controller process responds to Àpermission-to-moveÀ requests
+//COLLISION DETECTOR... the controller process responds to permission-to-move requests
 //                      from attackerAnt and userAnt. The process also checks if an attackerAnt
 //                      has moved to LED positions I, XII and XI.
 void controller(chanend fromAttacker, chanend fromUser) {
@@ -177,7 +174,7 @@ void controller(chanend fromAttacker, chanend fromUser) {
 	fromUser :> attempt; //start game when user moves
 	fromUser <: 1; //forbid first move
 
-	while (!gameIsOver) {
+	while (1) {
 		select {
 			case fromAttacker :> attempt:
                 if (attempt == lastReportedUserAntPosition) {
@@ -186,7 +183,7 @@ void controller(chanend fromAttacker, chanend fromUser) {
                 	if (attempt == 0 || attempt == 11 || attempt == 10) {
                 		lastReportedAttackerAntPosition = attempt;
                 		fromAttacker <: 2;
-                		fromUser <: 2;
+                		gameIsOver = 1;
                     } else {
                     	lastReportedAttackerAntPosition = attempt;
                         fromAttacker <: 0;
@@ -194,7 +191,9 @@ void controller(chanend fromAttacker, chanend fromUser) {
                 }
 			break;
 			case fromUser :> attempt:
-                if (attempt == lastReportedAttackerAntPosition) {
+				if (gameIsOver == 1) {
+					fromUser <: 2;
+				} else if (attempt == lastReportedAttackerAntPosition) {
                         fromUser <: 1;
                 } else {
                         lastReportedUserAntPosition = attempt;
