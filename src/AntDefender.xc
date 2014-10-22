@@ -10,6 +10,13 @@
 #include <stdio.h>
 #include <platform.h>
 
+#define MOVE_ALLOWED 0
+#define MOVE_FORBIDDEN 1
+#define GAME_OVER 2
+#define PAUSE_GAME 3
+#define PLAY_GAME 4
+#define RESTART_GAME 5
+
 out port cled0 = PORT_CLOCKLED_0;
 out port cled1 = PORT_CLOCKLED_1;
 out port cled2 = PORT_CLOCKLED_2;
@@ -99,6 +106,20 @@ int mod(int a, int b) {
 //
 /////////////////////////////////////////////////////////////////////////////////////////
 
+void pauseGame(chanend toController) {
+	toController <: PAUSE_GAME;
+}
+
+void playGame(chanend toController) {
+	toController <: PLAY_GAME;
+}
+
+void restartGame(chanend toController) {
+	printf("Restart game");
+
+	toController <: RESTART_GAME;
+}
+
 //DEFENDER PROCESS... The defender is controlled by this process userAnt,
 //                    which has channels to a buttonListener, visualiser and controller
 void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
@@ -107,21 +128,50 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 	int attemptedAntPosition = 0; //the next attempted defender position after considering button
 	int moveForbidden; //the verdict of the controller if move is allowed
 	int gameIsOver = 0;
+	int gameIsPaused = 0;
+
 	toVisualiser <: userAntPosition; //show initial position
 
 	while (gameIsOver == 0) {
+		timer t;
+		int lastPress = 0;
+
 		fromButtons :> buttonInput;
+		printf("Button: %d\n", buttonInput);
 		if (buttonInput == 14) attemptedAntPosition = mod((userAntPosition + 1), 12);
 		if (buttonInput == 7) attemptedAntPosition = mod((userAntPosition - 1), 12);
+		if (buttonInput == 13) {
+			int buttonPress;
+			t :> buttonPress;
+
+			if (buttonPress - lastPress > 5000000) {
+				// Button B
+				if (gameIsPaused == 0) {
+					pauseGame(toController);
+					gameIsPaused = 1;
+					lastPress = buttonPress;
+				} else {
+					playGame(toController);
+					gameIsPaused = 0;
+				}
+			}
+		}
+		if (buttonInput == 11) {
+			// Button C
+			restartGame(toController);
+		}
 
 		toController <: attemptedAntPosition;
 		toController :> moveForbidden;
 
-		if (moveForbidden == 0) {
+		if (moveForbidden == MOVE_ALLOWED) {
 			userAntPosition = attemptedAntPosition;
 			toVisualiser <: userAntPosition;
-		} else if (moveForbidden == 2) {
+		} else if (moveForbidden == GAME_OVER) {
 			gameIsOver = 1;
+		} else if (moveForbidden == RESTART_GAME) {
+			userAntPosition = 11;
+			toVisualiser <: userAntPosition;
 		}
 	}
 }
@@ -147,16 +197,19 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 		toController <: attemptedAntPosition;
 		toController :> moveForbidden;
 
-		if (moveForbidden == 0) {
+		if (moveForbidden == MOVE_ALLOWED) {
 			attackerAntPosition = attemptedAntPosition;
 			toVisualiser <: attackerAntPosition;
 			moveCounter += 1;
-		} else if (moveForbidden == 1) {
+		} else if (moveForbidden == MOVE_FORBIDDEN) {
 			currentDirection *= -1;
-		} else if (moveForbidden == 2) {
+		} else if (moveForbidden == GAME_OVER) {
 			attackerAntPosition = attemptedAntPosition;
 			toVisualiser <: attackerAntPosition;
 			gameIsOver = 1;
+		} else if (moveForbidden == RESTART_GAME) {
+			attackerAntPosition = 5;
+			toVisualiser <: attackerAntPosition;
 		}
 
 		waitMoment();
@@ -171,33 +224,48 @@ void controller(chanend fromAttacker, chanend fromUser) {
 	unsigned int lastReportedAttackerAntPosition = 5; //position last reported by attackerAnt
 	unsigned int attempt = 0;
 	int gameIsOver = 0;
+	int gameIsPaused = 0;
+	int shouldRestartGame = 0;
+
 	fromUser :> attempt; //start game when user moves
 	fromUser <: 1; //forbid first move
 
 	while (1) {
 		select {
 			case fromAttacker :> attempt:
-                if (attempt == lastReportedUserAntPosition) {
-                        fromAttacker <: 1;
+				if (shouldRestartGame == 1) {
+					shouldRestartGame = 0;
+					fromAttacker <: RESTART_GAME;
+				}
+                if (attempt == lastReportedUserAntPosition || gameIsPaused == 1) {
+                        fromAttacker <: MOVE_FORBIDDEN;
                 } else {
                 	if (attempt == 0 || attempt == 11 || attempt == 10) {
                 		lastReportedAttackerAntPosition = attempt;
-                		fromAttacker <: 2;
+                		fromAttacker <: GAME_OVER;
                 		gameIsOver = 1;
                     } else {
                     	lastReportedAttackerAntPosition = attempt;
-                        fromAttacker <: 0;
+                        fromAttacker <: MOVE_ALLOWED;
                     }
                 }
 			break;
 			case fromUser :> attempt:
 				if (gameIsOver == 1) {
-					fromUser <: 2;
-				} else if (attempt == lastReportedAttackerAntPosition) {
-                        fromUser <: 1;
+					fromUser <: GAME_OVER;
+				} else if (attempt == PAUSE_GAME) {
+					gameIsPaused = 1;
+				} else if (attempt == PLAY_GAME) {
+					gameIsPaused = 0;
+				} else if (attempt == RESTART_GAME) {
+					printf("Restart game");
+					fromUser <: RESTART_GAME;
+					shouldRestartGame = 1;
+				} else if (attempt == lastReportedAttackerAntPosition || gameIsPaused == 1) {
+                        fromUser <: MOVE_FORBIDDEN;
                 } else {
                         lastReportedUserAntPosition = attempt;
-                        fromUser <: 0;
+                        fromUser <: MOVE_ALLOWED;
                 }
 			break;
 		}
