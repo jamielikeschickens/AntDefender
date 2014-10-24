@@ -141,20 +141,15 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 		if (buttonInput == 14) attemptedAntPosition = mod((userAntPosition + 1), 12);
 		if (buttonInput == 7) attemptedAntPosition = mod((userAntPosition - 1), 12);
 		if (buttonInput == 13) {
-			int buttonPress;
-			t :> buttonPress;
-
-			if (buttonPress - lastPress > 5000000) {
-				// Button B
-				if (gameIsPaused == 0) {
-					pauseGame(toController);
-					gameIsPaused = 1;
-					lastPress = buttonPress;
-				} else {
-					playGame(toController);
-					gameIsPaused = 0;
-				}
-			}
+			// Button B
+            if (gameIsPaused == 0) {
+                    pauseGame(toController);
+                    gameIsPaused = 1;
+                    lastPress = buttonPress;
+            } else {
+                    playGame(toController);
+                    gameIsPaused = 0;
+            }
 		}
 		if (buttonInput == 11) {
 			// Button C
