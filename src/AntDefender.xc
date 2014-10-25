@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <platform.h>
+#include <timer.h>
 
 #define MOVE_ALLOWED 0
 #define MOVE_FORBIDDEN 1
@@ -43,11 +44,15 @@ int showLED(out port p, chanend fromVisualiser) {
 }
 
 //PROCESS TO COORDINATE DISPLAY of LED Ants
-void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
+void visualiser(chanend fromUserAnt, chanend fromAttackerAnt,
+		chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2,
+		chanend toQuadrant3) {
 	unsigned int userAntToDisplay = 11;
 	unsigned int attackerAntToDisplay = 5;
 	int i, j;
 	cledR <: 1;
+
+
 	while (1) {
 		select {
 			case fromUserAnt :> userAntToDisplay:
@@ -80,10 +85,18 @@ void playSound(unsigned int wavelength, out port speaker) {
 //READ BUTTONS and send to userAnt
 void buttonListener(in port b, out port spkr, chanend toUserAnt) {
 	int r;
+    int prevButton = 15;
+
 	while (1) {
-		b when pinsneq(15) :> r; // check if some buttons are pressed
-		playSound(2000000, spkr); // play sound
-		toUserAnt <: r; // send button pattern to userAnt
+		b :> r; // check if some buttons are pressed
+		if (prevButton == 15 && r != 15) {
+            playSound(2000000, spkr); // play sound
+            toUserAnt <: r; // send button pattern to userAnt
+		} else if (r == 7 || r == 14) {
+            playSound(2000000, spkr); // play sound
+			toUserAnt <: r;
+		}
+		prevButton = r;
 	}
 }
 
@@ -133,6 +146,8 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 	toVisualiser <: userAntPosition; //show initial position
 
 	while (gameIsOver == 0) {
+		timer t;
+		unsigned int lastPress = 0;
 
 		fromButtons :> buttonInput;
 		printf("Button: %d\n", buttonInput);
@@ -143,13 +158,14 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 			attemptedAntPosition = mod((userAntPosition - 1), 12);
 		if (buttonInput == 13) {
 			// Button B
-			if (gameIsPaused == 0) {
-				pauseGame(toController);
-				gameIsPaused = 1;
-			} else {
-				playGame(toController);
-				gameIsPaused = 0;
-			}
+			printf("Pressed\n");
+            if (gameIsPaused == 0) {
+                pauseGame(toController);
+                gameIsPaused = 1;
+            } else {
+                playGame(toController);
+                gameIsPaused = 0;
+            }
 		} else if (buttonInput == 11) {
 			// Button C
 			restartGame(toController);
@@ -182,13 +198,11 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 	toVisualiser <: attackerAntPosition; //show initial position
 
 	while (gameIsOver == 0) {
-		if (moveCounter % 31 == 0 || moveCounter % 37 == 0 || moveCounter % 47
-				== 0) {
+		if (moveCounter % 31 == 0 || moveCounter % 37 == 0 || moveCounter % 47 == 0) {
 			currentDirection *= -1;
 		}
 
-		attemptedAntPosition
-				= mod((attackerAntPosition + currentDirection), 12);
+		attemptedAntPosition = mod((attackerAntPosition + currentDirection), 12);
 
 		toController <: attemptedAntPosition;
 		toController :> moveForbidden;
