@@ -105,18 +105,23 @@ void playSound(unsigned int wavelength, out port speaker) {
 void buttonListener(in port b, out port spkr, chanend toUserAnt) {
 	int r;
 	int shutDownButtonListener = GAME_NOT_OVER;
+	int prevButton = 15;
 
 	while (shutDownButtonListener == GAME_NOT_OVER) {
-		printf("Button pressed\n");
-	    b when pinsneq(15) :> r;   // check if some buttons are pressed
-	    playSound(2000000,spkr);   // play sound
-	    toUserAnt <: r;            // send button pattern to userAnt
+		//printf("Button pressed\n");
+	    b :> r;   // check if some buttons are pressed
 
-	    int isGameOver;
-	    toUserAnt :> isGameOver;
-	    if (isGameOver == GAME_OVER) {
-	    	shutDownButtonListener = GAME_OVER;
+	    if (prevButton == 15 && r != 15) {
+	    	playSound(2000000,spkr);   // play sound
+	    	toUserAnt <: r;            // send button pattern to userAnt
+
+		    int isGameOver;
+		    toUserAnt :> isGameOver;
+		    if (isGameOver == GAME_OVER) {
+		    	shutDownButtonListener = GAME_OVER;
+		    }
 	    }
+	    prevButton = r;
 	}
 }
 
@@ -175,42 +180,43 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 			if (buttonInput == BUTTON_D) {
 				attemptedAntPosition = mod((userAntPosition - 1), 12);
 			}
-		}
-		if (buttonInput == BUTTON_C) {
-			fromButtons <: GAME_OVER;
-			toVisualiser <: GAME_OVER;
-			toController <: GAME_TERMINATED;
-		}
-		if (buttonInput == BUTTON_B) {
-			if (gameIsPaused == 0) {
-				gameIsPaused = 1;
-			} else {
-				gameIsPaused = 0;
+			if (buttonInput == BUTTON_C) {
+						fromButtons <: GAME_OVER;
+						toVisualiser <: GAME_OVER;
+						toController <: GAME_TERMINATED;
+			}
+			if (buttonInput == BUTTON_B) {
+				if (gameIsPaused == 0) {
+					gameIsPaused = 1;
+				} else {
+					gameIsPaused = 0;
+				}
+
+				toController <: GAME_PAUSED;
+				fromButtons <: GAME_NOT_OVER;
+				//printf("Does reach here\n");
 			}
 
-			toController <: GAME_PAUSED;
-			fromButtons <: GAME_NOT_OVER;
-			printf("Does reach here\n");
-		}
+			if (buttonInput != BUTTON_B) {
+				//printf("Attempted ant position %d\n", attemptedAntPosition);
+	            toController <: attemptedAntPosition;
+				//printf("Move allowed\n");
 
-		if (buttonInput != BUTTON_B) {
-			//printf("Attempted ant position %d\n", attemptedAntPosition);
-            toController <: attemptedAntPosition;
-			//printf("Move allowed\n");
+	            toController :> moveForbidden;
 
-            toController :> moveForbidden;
-
-			if (moveForbidden == MOVE_ALLOWED) {
-				fromButtons <: GAME_NOT_OVER;
-				userAntPosition = attemptedAntPosition;
-				toVisualiser <: userAntPosition;
-			} else if (moveForbidden == MOVE_FORBIDDEN) {
-				fromButtons <: GAME_NOT_OVER;
-			} else if (moveForbidden == GAME_OVER) {
-				fromButtons <: GAME_OVER;
-				toVisualiser <: GAME_OVER;
-				gameIsOver = 1;
+				if (moveForbidden == MOVE_ALLOWED) {
+					fromButtons <: GAME_NOT_OVER;
+					userAntPosition = attemptedAntPosition;
+					toVisualiser <: userAntPosition;
+				} else if (moveForbidden == MOVE_FORBIDDEN) {
+					fromButtons <: GAME_NOT_OVER;
+				} else if (moveForbidden == GAME_OVER) {
+					fromButtons <: GAME_OVER;
+					toVisualiser <: GAME_OVER;
+					gameIsOver = 1;
+				}
 			}
+
 		}
 	}
 }
@@ -302,7 +308,7 @@ void controller(chanend fromAttacker, chanend fromUser) {
 			break;
 
 			case fromUser :> attempt:
-				printf("Attempt from user: %d\n", attempt);
+				//printf("Attempt from user: %d\n", attempt);
                 if (gameIsOver == 1) {
                 	printf("Game is over?\n");
                     fromUser <: GAME_OVER;
@@ -320,10 +326,10 @@ void controller(chanend fromAttacker, chanend fromUser) {
                 	printf("Game is terminated :(\n");
                 	shouldTerminate = 1;
                 } else if (attempt == lastReportedAttackerAntPosition || gameIsPaused == 1)  {
-                	printf("no dont move\n");
+                	//printf("no dont move\n");
                     fromUser <: MOVE_FORBIDDEN;
                 } else {
-                	printf("fast like the wind\n");
+                	//printf("fast like the wind\n");
                     lastReportedUserAntPosition = attempt;
                     fromUser <: MOVE_ALLOWED;
                 }
