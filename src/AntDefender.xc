@@ -13,10 +13,16 @@
 
 #define MOVE_ALLOWED 0
 #define MOVE_FORBIDDEN 1
-#define GAME_OVER 2
-#define PAUSE_GAME 3
-#define PLAY_GAME 4
-#define RESTART_GAME 5
+#define GAME_OVER 2000
+#define GAME_NOT_OVER 3000
+#define GAME_TERMINATED 4000
+#define GAME_PAUSED 5000
+#define GAME_RESTARTED 6000
+
+#define BUTTON_A 14
+#define BUTTON_B 13
+#define BUTTON_C 11
+#define BUTTON_D 7
 
 out port cled0 = PORT_CLOCKLED_0;
 out port cled1 = PORT_CLOCKLED_1;
@@ -35,38 +41,51 @@ out port speaker = PORT_SPEAKER;
 
 //DISPLAYS an LED pattern in one quadrant of the clock LEDs
 int showLED(out port p, chanend fromVisualiser) {
-	unsigned int lightUpPattern;
-	while (1) {
-		fromVisualiser :> lightUpPattern; //read LED pattern from visualiser process
-		p <: lightUpPattern; //send pattern to LEDs
-	}
-	return 0;
+  unsigned int lightUpPattern;
+  int shutDownLED = GAME_NOT_OVER;
+
+  while (shutDownLED == GAME_NOT_OVER) {
+    fromVisualiser :> lightUpPattern; //read LED pattern from visualiser process
+
+    if (lightUpPattern == GAME_OVER) {
+    	shutDownLED = GAME_OVER;
+    } else {
+    	p <: lightUpPattern;  //send pattern to LEDs
+    }
+  }
+  return 0;
 }
 
 //PROCESS TO COORDINATE DISPLAY of LED Ants
-void visualiser(chanend fromUserAnt, chanend fromAttackerAnt,
-		chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2,
-		chanend toQuadrant3) {
-	unsigned int userAntToDisplay = 11;
-	unsigned int attackerAntToDisplay = 5;
-	int i, j;
-	cledR <: 1;
-
-
-	while (1) {
-		select {
-			case fromUserAnt :> userAntToDisplay:
-			break;
-			case fromAttackerAnt :> attackerAntToDisplay:
-			break;
-		}
-		j = 16 << (userAntToDisplay % 3);
-		i = 16 << (attackerAntToDisplay % 3);
-		toQuadrant0 <: (j*(userAntToDisplay/3==0)) + (i*(attackerAntToDisplay/3==0));
-		toQuadrant1 <: (j*(userAntToDisplay/3==1)) + (i*(attackerAntToDisplay/3==1));
-		toQuadrant2 <: (j*(userAntToDisplay/3==2)) + (i*(attackerAntToDisplay/3==2));
-		toQuadrant3 <: (j*(userAntToDisplay/3==3)) + (i*(attackerAntToDisplay/3==3));
-	}
+void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
+  unsigned int userAntToDisplay = 11;
+  unsigned int attackerAntToDisplay = 5;
+  int shutDownVisualiser = GAME_NOT_OVER;
+  int i, j;
+  cledR <: 1;
+  while (shutDownVisualiser == GAME_NOT_OVER) {
+    select {
+      case fromUserAnt :> userAntToDisplay:
+    	  if (userAntToDisplay == GAME_OVER) {
+    		  shutDownVisualiser = GAME_OVER;
+    		  toQuadrant0 <: GAME_OVER;
+    		  toQuadrant1 <: GAME_OVER;
+    		  toQuadrant2 <: GAME_OVER;
+    		  toQuadrant3 <: GAME_OVER;
+    	  }
+        break;
+      case fromAttackerAnt :> attackerAntToDisplay:
+        break;
+    }
+    if (userAntToDisplay != GAME_OVER) {
+    j = 16<<(userAntToDisplay%3);
+    i = 16<<(attackerAntToDisplay%3);
+    	toQuadrant0 <: (j*(userAntToDisplay/3==0)) + (i*(attackerAntToDisplay/3==0)) ;
+    	toQuadrant1 <: (j*(userAntToDisplay/3==1)) + (i*(attackerAntToDisplay/3==1)) ;
+    	toQuadrant2 <: (j*(userAntToDisplay/3==2)) + (i*(attackerAntToDisplay/3==2)) ;
+    	toQuadrant3 <: (j*(userAntToDisplay/3==3)) + (i*(attackerAntToDisplay/3==3)) ;
+    }
+  }
 }
 
 //PLAYS a short sound (pls use with caution and consideration to other students in the labs!)
@@ -85,18 +104,19 @@ void playSound(unsigned int wavelength, out port speaker) {
 //READ BUTTONS and send to userAnt
 void buttonListener(in port b, out port spkr, chanend toUserAnt) {
 	int r;
-    int prevButton = 15;
+	int shutDownButtonListener = GAME_NOT_OVER;
 
-	while (1) {
-		b :> r; // check if some buttons are pressed
-		if (prevButton == 15 && r != 15) {
-            playSound(2000000, spkr); // play sound
-            toUserAnt <: r; // send button pattern to userAnt
-		} else if (r == 7 || r == 14) {
-            playSound(2000000, spkr); // play sound
-			toUserAnt <: r;
-		}
-		prevButton = r;
+	while (shutDownButtonListener == GAME_NOT_OVER) {
+		printf("Button pressed\n");
+	    b when pinsneq(15) :> r;   // check if some buttons are pressed
+	    playSound(2000000,spkr);   // play sound
+	    toUserAnt <: r;            // send button pattern to userAnt
+
+	    int isGameOver;
+	    toUserAnt :> isGameOver;
+	    if (isGameOver == GAME_OVER) {
+	    	shutDownButtonListener = GAME_OVER;
+	    }
 	}
 }
 
@@ -119,20 +139,6 @@ int mod(int a, int b) {
 //
 /////////////////////////////////////////////////////////////////////////////////////////
 
-void pauseGame(chanend toController) {
-	toController <: PAUSE_GAME
-;}
-
-void playGame(chanend toController) {
-	toController <: PLAY_GAME
-;}
-
-void restartGame(chanend toController) {
-	printf("Restart game");
-
-	toController <: RESTART_GAME
-;}
-
 //DEFENDER PROCESS... The defender is controlled by this process userAnt,
 //                    which has channels to a buttonListener, visualiser and controller
 void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
@@ -145,42 +151,65 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 
 	toVisualiser <: userAntPosition; //show initial position
 
+	int i= 0;
+
 	while (gameIsOver == 0) {
 		timer t;
 		unsigned int lastPress = 0;
+		i++;
 
 		fromButtons :> buttonInput;
-		printf("Button: %d\n", buttonInput);
+		//printf("Is game paused: %d and button is %d\n", gameIsPaused, buttonInput);
+		if (gameIsPaused == 1 && buttonInput == BUTTON_A) {
+			//printf("Restart game\n");
+			toController <: GAME_RESTARTED;
+			fromButtons <: GAME_NOT_OVER;
 
-		if (buttonInput == 14)
-			attemptedAntPosition = mod((userAntPosition + 1), 12);
-		if (buttonInput == 7)
-			attemptedAntPosition = mod((userAntPosition - 1), 12);
-		if (buttonInput == 13) {
-			// Button B
-			printf("Pressed\n");
-            if (gameIsPaused == 0) {
-                pauseGame(toController);
-                gameIsPaused = 1;
-            } else {
-                playGame(toController);
-                gameIsPaused = 0;
-            }
-		} else if (buttonInput == 11) {
-			// Button C
-			restartGame(toController);
+			userAntPosition = 11;
+			toVisualiser <: userAntPosition;
+			gameIsPaused = 0;
 		} else {
-			toController <: attemptedAntPosition;
-			toController :> moveForbidden;
+			if (buttonInput == BUTTON_A) {
+				attemptedAntPosition = mod((userAntPosition + 1), 12);
+			}
+			if (buttonInput == BUTTON_D) {
+				attemptedAntPosition = mod((userAntPosition - 1), 12);
+			}
+		}
+		if (buttonInput == BUTTON_C) {
+			fromButtons <: GAME_OVER;
+			toVisualiser <: GAME_OVER;
+			toController <: GAME_TERMINATED;
+		}
+		if (buttonInput == BUTTON_B) {
+			if (gameIsPaused == 0) {
+				gameIsPaused = 1;
+			} else {
+				gameIsPaused = 0;
+			}
+
+			toController <: GAME_PAUSED;
+			fromButtons <: GAME_NOT_OVER;
+			printf("Does reach here\n");
+		}
+
+		if (buttonInput != BUTTON_B) {
+			//printf("Attempted ant position %d\n", attemptedAntPosition);
+            toController <: attemptedAntPosition;
+			//printf("Move allowed\n");
+
+            toController :> moveForbidden;
 
 			if (moveForbidden == MOVE_ALLOWED) {
+				fromButtons <: GAME_NOT_OVER;
 				userAntPosition = attemptedAntPosition;
 				toVisualiser <: userAntPosition;
+			} else if (moveForbidden == MOVE_FORBIDDEN) {
+				fromButtons <: GAME_NOT_OVER;
 			} else if (moveForbidden == GAME_OVER) {
+				fromButtons <: GAME_OVER;
+				toVisualiser <: GAME_OVER;
 				gameIsOver = 1;
-			} else if (moveForbidden == RESTART_GAME) {
-				userAntPosition = 11;
-				toVisualiser <: userAntPosition;
 			}
 		}
 	}
@@ -194,10 +223,10 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 	unsigned int attemptedAntPosition; //the next attempted  position after considering move direction
 	int currentDirection = 1; //the current direction the attacker is moving
 	int moveForbidden = 0; //the verdict of the controller if move is allowed
-	int gameIsOver = 0;
+	int gameIsOver = GAME_NOT_OVER;
 	toVisualiser <: attackerAntPosition; //show initial position
 
-	while (gameIsOver == 0) {
+	while (gameIsOver == GAME_NOT_OVER) {
 		if (moveCounter % 31 == 0 || moveCounter % 37 == 0 || moveCounter % 47 == 0) {
 			currentDirection *= -1;
 		}
@@ -211,15 +240,18 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 			attackerAntPosition = attemptedAntPosition;
 			toVisualiser <: attackerAntPosition;
 			moveCounter += 1;
-		} else if (moveForbidden == MOVE_FORBIDDEN) {
+		} else if (moveForbidden == GAME_RESTARTED) {
+			attackerAntPosition = 5;
+			toVisualiser <: attackerAntPosition;
+		}
+		else if (moveForbidden == MOVE_FORBIDDEN) {
 			currentDirection *= -1;
 		} else if (moveForbidden == GAME_OVER) {
 			attackerAntPosition = attemptedAntPosition;
 			toVisualiser <: attackerAntPosition;
-			gameIsOver = 1;
-		} else if (moveForbidden == RESTART_GAME) {
-			attackerAntPosition = 5;
-			toVisualiser <: attackerAntPosition;
+			gameIsOver = GAME_OVER;
+		} else if (moveForbidden == GAME_TERMINATED) {
+			gameIsOver = GAME_OVER;
 		}
 
 		waitMoment();
@@ -235,20 +267,28 @@ void controller(chanend fromAttacker, chanend fromUser) {
 	unsigned int attempt = 0;
 	int gameIsOver = 0;
 	int gameIsPaused = 0;
-	int shouldRestartGame = 0;
+	int shouldTerminate = 0;
+	int shouldRestart = 0;
+	int shutDownController = 0;
 
 	fromUser :> attempt; //start game when user moves
-	fromUser <: 1; //forbid first move
+	fromUser <: MOVE_FORBIDDEN; //forbid first move
 
-	while (1) {
+	while (shutDownController == 0) {
 		select {
 			case fromAttacker :> attempt:
-                if (shouldRestartGame == 1) {
-                    shouldRestartGame = 0;
-                    fromAttacker <: RESTART_GAME;
-                }
-                if (attempt == lastReportedUserAntPosition || gameIsPaused == 1) {
+				//printf("Attempt from attacker\n");
+                if (attempt == lastReportedUserAntPosition) {
                     fromAttacker <: MOVE_FORBIDDEN;
+                } else if (shouldRestart == 1) {
+                	fromAttacker <: GAME_RESTARTED;
+                	shouldRestart = 0;
+                	gameIsPaused = 0;
+                } else if (shouldTerminate == 1) {
+                	fromAttacker <: GAME_TERMINATED;
+                	shutDownController = 1;
+                } else if (gameIsPaused == 1) {
+                	fromAttacker <: MOVE_FORBIDDEN;
                 } else {
                     if (attempt == 0 || attempt == 11 || attempt == 10) {
                         lastReportedAttackerAntPosition = attempt;
@@ -262,19 +302,28 @@ void controller(chanend fromAttacker, chanend fromUser) {
 			break;
 
 			case fromUser :> attempt:
+				printf("Attempt from user: %d\n", attempt);
                 if (gameIsOver == 1) {
+                	printf("Game is over?\n");
                     fromUser <: GAME_OVER;
-                } else if (attempt == PAUSE_GAME) {
-                    gameIsPaused = 1;
-                } else if (attempt == PLAY_GAME) {
-                    gameIsPaused = 0;
-                } else if (attempt == RESTART_GAME) {
-                    printf("Restart game");
-                    shouldRestartGame = 1;
-                    fromUser <: RESTART_GAME;
-                } else if (attempt == lastReportedAttackerAntPosition || gameIsPaused == 1) {
+                    shutDownController = 1;
+                } else if (attempt == GAME_PAUSED) {
+                	if (gameIsPaused == 1) {
+                		gameIsPaused = 0;
+                	} else {
+                		gameIsPaused = 1;
+                	}
+                } else if (attempt == GAME_RESTARTED) {
+                	printf("Should restart here\n");
+                	shouldRestart = 1;
+                } else if (attempt == GAME_TERMINATED) {
+                	printf("Game is terminated :(\n");
+                	shouldTerminate = 1;
+                } else if (attempt == lastReportedAttackerAntPosition || gameIsPaused == 1)  {
+                	printf("no dont move\n");
                     fromUser <: MOVE_FORBIDDEN;
                 } else {
+                	printf("fast like the wind\n");
                     lastReportedUserAntPosition = attempt;
                     fromUser <: MOVE_ALLOWED;
                 }
@@ -285,27 +334,26 @@ void controller(chanend fromAttacker, chanend fromUser) {
 
 //MAIN PROCESS defining channels, orchestrating and starting the processes
 int main(void) {
-	chan buttonsToUserAnt, //channel from buttonListener to userAnt
-			userAntToVisualiser, //channel from userAnt to Visualiser
-			attackerAntToVisualiser, //channel from attackerAnt to Visualiser
-			attackerAntToController, //channel from attackerAnt to Controller
-			userAntToController; //channel from userAnt to Controller
-	chan quadrant0, quadrant1, quadrant2, quadrant3; //helper channels for LED visualisation
+  chan buttonsToUserAnt,         //channel from buttonListener to userAnt
+       userAntToVisualiser,      //channel from userAnt to Visualiser
+       attackerAntToVisualiser,  //channel from attackerAnt to Visualiser
+       attackerAntToController,  //channel from attackerAnt to Controller
+       userAntToController;      //channel from userAnt to Controller
+  chan quadrant0,quadrant1,quadrant2,quadrant3; //helper channels for LED visualisation
 
-	par {
-		//PROCESSES FOR YOU TO EXPAND
-		on stdcore[1]: userAnt(buttonsToUserAnt, userAntToVisualiser, userAntToController);
-		on stdcore[2]: attackerAnt(attackerAntToVisualiser, attackerAntToController);
-		on stdcore[3]: controller(attackerAntToController, userAntToController);
+  par {
+    //PROCESSES FOR YOU TO EXPAND
+    on stdcore[1]: userAnt(buttonsToUserAnt,userAntToVisualiser,userAntToController);
+    on stdcore[2]: attackerAnt(attackerAntToVisualiser,attackerAntToController);
+    on stdcore[3]: controller(attackerAntToController, userAntToController);
 
-		//HELPER PROCESSES
-		on stdcore[0]: buttonListener(buttons, speaker, buttonsToUserAnt);
-		on stdcore[0]: visualiser(userAntToVisualiser, attackerAntToVisualiser, quadrant0,
-				quadrant1, quadrant2, quadrant3);
-		on stdcore[0]: showLED(cled0, quadrant0);
-		on stdcore[1]: showLED(cled1, quadrant1);
-		on stdcore[2]: showLED(cled2, quadrant2);
-		on stdcore[3]: showLED(cled3, quadrant3);
-	}
-	return 0;
+    //HELPER PROCESSES
+    on stdcore[0]: buttonListener(buttons, speaker,buttonsToUserAnt);
+    on stdcore[0]: visualiser(userAntToVisualiser,attackerAntToVisualiser,quadrant0,quadrant1,quadrant2,quadrant3);
+    on stdcore[0]: showLED(cled0,quadrant0);
+    on stdcore[1]: showLED(cled1,quadrant1);
+    on stdcore[2]: showLED(cled2,quadrant2);
+    on stdcore[3]: showLED(cled3,quadrant3);
+  }
+  return 0;
 }
