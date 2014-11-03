@@ -16,6 +16,7 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
+
 //DISPLAYS an LED pattern in one quadrant of the clock LEDs
 int showLED(out port p, chanend fromVisualiser) {
   unsigned int lightUpPattern;
@@ -34,54 +35,6 @@ int showLED(out port p, chanend fromVisualiser) {
   return 0;
 }
 
-void flashGameOver(chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
-	  toQuadrant0 <: 0b01110000;
-	  toQuadrant1 <: 0b01110000;
-	  toQuadrant2 <: 0b01110000;
-	  toQuadrant3 <: 0b01110000;
-
-	  waitMoment(16000000);
-
-	  toQuadrant0 <: 0;
-	  toQuadrant1 <: 0;
-	  toQuadrant2 <: 0;
-	  toQuadrant3 <: 0;
-
-	  waitMoment(16000000);
-
-	  toQuadrant0 <: 0b01110000;
-	  toQuadrant1 <: 0b01110000;
-	  toQuadrant2 <: 0b01110000;
-	  toQuadrant3 <: 0b01110000;
-
-	  waitMoment(16000000);
-}
-
-void flashLevelUp(chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
-	printf("flash level up function");
-
-	toQuadrant0 <: 0b01110000;
-	toQuadrant1 <: 0b01110000;
-	toQuadrant2 <: 0b01110000;
-	toQuadrant3 <: 0b01110000;
-
-	waitMoment(16000000);
-
-	toQuadrant0 <: 0;
-	toQuadrant1 <: 0;
-	toQuadrant2 <: 0;
-	toQuadrant3 <: 0;
-
-	waitMoment(16000000);
-
-	toQuadrant0 <: 0b01110000;
-	toQuadrant1 <: 0b01110000;
-	toQuadrant2 <: 0b01110000;
-	toQuadrant3 <: 0b01110000;
-
-	waitMoment(16000000);
-}
-
 //PROCESS TO COORDINATE DISPLAY of LED Ants
 void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
   unsigned int userAntToDisplay = 11;
@@ -93,7 +46,27 @@ void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant
     select {
       case fromUserAnt :> userAntToDisplay:
     	  if (userAntToDisplay == GAME_OVER) {
-    		  flashGameOver(toQuadrant0, toQuadrant1, toQuadrant2, toQuadrant3);
+
+    		  toQuadrant0 <: 0b01110000;
+    		  toQuadrant1 <: 0b01110000;
+    		  toQuadrant2 <: 0b01110000;
+    		  toQuadrant3 <: 0b01110000;
+
+    		  waitMoment(16000000);
+
+    		  toQuadrant0 <: 0;
+    		  toQuadrant1 <: 0;
+    		  toQuadrant2 <: 0;
+    		  toQuadrant3 <: 0;
+
+    		  waitMoment(16000000);
+
+    		  toQuadrant0 <: 0b01110000;
+    		  toQuadrant1 <: 0b01110000;
+    		  toQuadrant2 <: 0b01110000;
+    		  toQuadrant3 <: 0b01110000;
+
+    		  waitMoment(16000000);
 
     		  shutDownVisualiser = GAME_OVER;
     		  toQuadrant0 <: GAME_OVER;
@@ -108,18 +81,34 @@ void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant
     if (attackerAntToDisplay == LEVEL_UP) {
     	printf("LEVEL UP\n");
 
-    	//cledR <: 0;
-    	//cledG <: 1;
-		printf("level up print");
+    	cledR <: 0;
+    	cledG <: 1;
 
-    	flashLevelUp(toQuadrant0, toQuadrant1, toQuadrant2, toQuadrant3);
+		 toQuadrant0 <: 0b01110000;
+		 toQuadrant1 <: 0b01110000;
+		 toQuadrant2 <: 0b01110000;
+		 toQuadrant3 <: 0b01110000;
 
-		//printf("level up print");
+		 waitMoment(16000000);
 
-		cledG <: 0;
-		cledR <: 1;
+		 toQuadrant0 <: 0;
+		 toQuadrant1 <: 0;
+		 toQuadrant2 <: 0;
+		 toQuadrant3 <: 0;
 
-		fromAttackerAnt <: LEVELED_UP;
+		 waitMoment(16000000);
+
+		 toQuadrant0 <: 0b01110000;
+		 toQuadrant1 <: 0b01110000;
+		 toQuadrant2 <: 0b01110000;
+		 toQuadrant3 <: 0b01110000;
+
+		 waitMoment(16000000);
+
+		 cledG <: 0;
+		 cledR <: 1;
+
+    	fromAttackerAnt <: LEVELED_UP;
 
     } else if (userAntToDisplay != GAME_OVER) {
 
