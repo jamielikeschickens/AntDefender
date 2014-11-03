@@ -11,6 +11,12 @@
 #include <platform.h>
 #include <timer.h>
 
+#define DEBUG 0
+
+#ifndef DEBUG
+#define printf(...)
+#endif
+
 #define MOVE_ALLOWED 0
 #define MOVE_FORBIDDEN 1
 #define GAME_OVER 2000
@@ -18,6 +24,8 @@
 #define GAME_TERMINATED 4000
 #define GAME_PAUSED 5000
 #define GAME_RESTARTED 6000
+#define LEVEL_UP 7000
+#define LEVELED_UP 8000
 
 #define BUTTON_A 14
 #define BUTTON_B 13
@@ -32,6 +40,8 @@ out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 in port buttons = PORT_BUTTON;
 out port speaker = PORT_SPEAKER;
+
+void waitMoment(int timeToWait);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -48,10 +58,13 @@ int showLED(out port p, chanend fromVisualiser) {
     fromVisualiser :> lightUpPattern; //read LED pattern from visualiser process
 
     if (lightUpPattern == GAME_OVER) {
+    	printf("Game over led");
     	shutDownLED = GAME_OVER;
     } else {
+    	//printf("Light up pattern: %d\n", lightUpPattern);
     	p <: lightUpPattern;  //send pattern to LEDs
     }
+
   }
   return 0;
 }
@@ -67,6 +80,28 @@ void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant
     select {
       case fromUserAnt :> userAntToDisplay:
     	  if (userAntToDisplay == GAME_OVER) {
+
+    		  toQuadrant0 <: 0b01110000;
+    		  toQuadrant1 <: 0b01110000;
+    		  toQuadrant2 <: 0b01110000;
+    		  toQuadrant3 <: 0b01110000;
+
+    		  waitMoment(16000000);
+
+    		  toQuadrant0 <: 0;
+    		  toQuadrant1 <: 0;
+    		  toQuadrant2 <: 0;
+    		  toQuadrant3 <: 0;
+
+    		  waitMoment(16000000);
+
+    		  toQuadrant0 <: 0b01110000;
+    		  toQuadrant1 <: 0b01110000;
+    		  toQuadrant2 <: 0b01110000;
+    		  toQuadrant3 <: 0b01110000;
+
+    		  waitMoment(16000000);
+
     		  shutDownVisualiser = GAME_OVER;
     		  toQuadrant0 <: GAME_OVER;
     		  toQuadrant1 <: GAME_OVER;
@@ -77,9 +112,42 @@ void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant
       case fromAttackerAnt :> attackerAntToDisplay:
         break;
     }
-    if (userAntToDisplay != GAME_OVER) {
-    j = 16<<(userAntToDisplay%3);
-    i = 16<<(attackerAntToDisplay%3);
+    if (attackerAntToDisplay == LEVEL_UP) {
+    	printf("LEVELUP\n");
+
+    	cledR <: 0;
+    	cledG <: 1;
+
+		 toQuadrant0 <: 0b01110000;
+		 toQuadrant1 <: 0b01110000;
+		 toQuadrant2 <: 0b01110000;
+		 toQuadrant3 <: 0b01110000;
+
+		 waitMoment(16000000);
+
+		 toQuadrant0 <: 0;
+		 toQuadrant1 <: 0;
+		 toQuadrant2 <: 0;
+		 toQuadrant3 <: 0;
+
+		 waitMoment(16000000);
+
+		 toQuadrant0 <: 0b01110000;
+		 toQuadrant1 <: 0b01110000;
+		 toQuadrant2 <: 0b01110000;
+		 toQuadrant3 <: 0b01110000;
+
+		 waitMoment(16000000);
+
+		 cledG <: 0;
+		 cledR <: 1;
+
+    	fromAttackerAnt <: LEVELED_UP;
+
+    } else if (userAntToDisplay != GAME_OVER) {
+
+    	j = 16<<(userAntToDisplay%3);
+    	i = 16<<(attackerAntToDisplay%3);
     	toQuadrant0 <: (j*(userAntToDisplay/3==0)) + (i*(attackerAntToDisplay/3==0)) ;
     	toQuadrant1 <: (j*(userAntToDisplay/3==1)) + (i*(attackerAntToDisplay/3==1)) ;
     	toQuadrant2 <: (j*(userAntToDisplay/3==2)) + (i*(attackerAntToDisplay/3==2)) ;
@@ -126,11 +194,11 @@ void buttonListener(in port b, out port spkr, chanend toUserAnt) {
 }
 
 //WAIT function
-void waitMoment() {
+void waitMoment(int timeToWait) {
 	timer tmr;
 	uint waitTime;
 	tmr :> waitTime;
-	waitTime += 10000000;
+	waitTime += timeToWait;
 	tmr when timerafter(waitTime) :> void;
 }
 
@@ -181,9 +249,9 @@ void userAnt(chanend fromButtons, chanend toVisualiser, chanend toController) {
 				attemptedAntPosition = mod((userAntPosition - 1), 12);
 			}
 			if (buttonInput == BUTTON_C) {
-						fromButtons <: GAME_OVER;
-						toVisualiser <: GAME_OVER;
-						toController <: GAME_TERMINATED;
+				fromButtons <: GAME_OVER;
+				toVisualiser <: GAME_OVER;
+				toController <: GAME_TERMINATED;
 			}
 			if (buttonInput == BUTTON_B) {
 				if (gameIsPaused == 0) {
@@ -230,11 +298,29 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 	int currentDirection = 1; //the current direction the attacker is moving
 	int moveForbidden = 0; //the verdict of the controller if move is allowed
 	int gameIsOver = GAME_NOT_OVER;
+	int timeToWait = 30000000;
+	int lastMoveCounter = 0;
+
 	toVisualiser <: attackerAntPosition; //show initial position
 
 	while (gameIsOver == GAME_NOT_OVER) {
 		if (moveCounter % 31 == 0 || moveCounter % 37 == 0 || moveCounter % 47 == 0) {
 			currentDirection *= -1;
+		}
+
+		if (moveCounter % 50 == 0 && moveCounter != lastMoveCounter) {
+			lastMoveCounter = moveCounter;
+			printf("Move counter: %d\n", moveCounter);
+
+
+
+			timeToWait = timeToWait - 1000000;
+
+			toController <: GAME_PAUSED;
+			toVisualiser <: LEVEL_UP;
+			int response;
+			toVisualiser :> response;
+			toController <: GAME_PAUSED;
 		}
 
 		attemptedAntPosition = mod((attackerAntPosition + currentDirection), 12);
@@ -248,6 +334,7 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 			moveCounter += 1;
 		} else if (moveForbidden == GAME_RESTARTED) {
 			attackerAntPosition = 5;
+			moveCounter = 0;
 			toVisualiser <: attackerAntPosition;
 		}
 		else if (moveForbidden == MOVE_FORBIDDEN) {
@@ -260,7 +347,8 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 			gameIsOver = GAME_OVER;
 		}
 
-		waitMoment();
+		waitMoment(timeToWait);
+
 	}
 }
 
@@ -283,8 +371,15 @@ void controller(chanend fromAttacker, chanend fromUser) {
 	while (shutDownController == 0) {
 		select {
 			case fromAttacker :> attempt:
-				//printf("Attempt from attacker\n");
-                if (attempt == lastReportedUserAntPosition) {
+				//printf("Attempt from attacker: %d\n", attempt);
+
+				if (attempt == GAME_PAUSED) {
+					if (gameIsPaused == 0) {
+						gameIsPaused = 1;
+					} else {
+						gameIsPaused = 0;
+					}
+				} else if (attempt == lastReportedUserAntPosition) {
                     fromAttacker <: MOVE_FORBIDDEN;
                 } else if (shouldRestart == 1) {
                 	fromAttacker <: GAME_RESTARTED;
