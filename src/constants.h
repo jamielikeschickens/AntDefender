@@ -25,6 +25,6 @@
 #define BUTTON_D 7
 #define NO_BUTTON 15
 
-#define LEVEL_SIZE 10
+#define LEVEL_SIZE 50
 
 #endif /* CONSTANTS_H_ */
