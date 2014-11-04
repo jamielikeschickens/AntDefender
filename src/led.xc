@@ -108,6 +108,7 @@ void visualiser(chanend fromUserAnt, chanend fromAttackerAnt, chanend toQuadrant
 		 cledG <: 0;
 		 cledR <: 1;
 
+
     	fromAttackerAnt <: LEVELED_UP;
 
     } else if (userAntToDisplay != GAME_OVER) {

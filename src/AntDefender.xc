@@ -190,7 +190,7 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 		}
 
 		if (moveCounter % LEVEL_SIZE == 0 && moveCounter != lastMoveCounter) {
-			levelUp(toController, toVisualiser,&lastMoveCounter, moveCounter, &timeToWait);
+			levelUp(toController, toVisualiser, &lastMoveCounter, moveCounter, &timeToWait);
 		}
 
 		attemptedAntPosition = mod((attackerAntPosition + currentDirection), 12);
@@ -205,6 +205,7 @@ void attackerAnt(chanend toVisualiser, chanend toController) {
 		} else if (moveForbidden == GAME_RESTARTED) {
 			attackerAntPosition = 5;
 			moveCounter = 0;
+			timeToWait = 25000000;
 			toVisualiser <: attackerAntPosition;
 		}
 		else if (moveForbidden == MOVE_FORBIDDEN) {
@@ -233,13 +234,13 @@ void levelUp(chanend toController, chanend toVisualiser, int *lastMoveCounter, i
 	*timeToWait = *timeToWait - 2000000;
 
 	toController <: GAME_PAUSED;
-	printf("after sending game paused");
+	printf("after sending game paused\n");
 	toVisualiser <: LEVEL_UP;
-	printf("after sending level up to visualiser");
+	printf("after sending level up to visualiser\n");
 	int response;
 	toVisualiser :> response;
-	printf("we get a response");
-	toController <: GAME_NOT_PAUSED;
+	printf("we get a response\n");
+	toController <: GAME_PAUSED;
 }
 
 //COLLISION DETECTOR... the controller process responds to permission-to-move requests
